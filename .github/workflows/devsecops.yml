@@ -2,14 +2,14 @@ name: DevSecOps Pipeline
 
 on:
   push:
-    branches: [ main ]
+    branches: [ test-ec2 ]
   pull_request:
-    branches: [ main ]
+    branches: [ test-ec2 ]
 
 jobs:
   # SAST – SonarQube Scan
   sast:
-    name: SAST (SonarQube)
+    name: SAST (SonarCloud)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -27,17 +27,20 @@ jobs:
             -Dsonar.sources=.
             -Dsonar.python.version=3.9
 
-      - name: Store SonarQube Results
+      - name: Store SonarCloud Results
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         run: |
           mkdir -p security-results/sonarqube
-          curl -H "Authorization: Bearer ${{ secrets.SONAR_TOKEN }}" \
-               "${{ secrets.SONAR_HOST_URL }}/api/issues/search?projectKeys=commando-x_vuln-bank" \
+          
+          curl -s -H "Authorization: Bearer ${SONAR_TOKEN}" \
+               "https://sonarcloud.io/api/issues/search?componentKeys=commando-x_vuln-bank" \
                > security-results/sonarqube/issues.json
           
           if [ -s security-results/sonarqube/issues.json ]; then
-            echo "SonarQube results saved successfully"
+            echo "SonarCloud results saved successfully"
           else
-            echo "No SonarQube issues found"
+            echo "No SonarCloud issues found"
             echo '{"issues": []}' > security-results/sonarqube/issues.json
           fi
 
@@ -315,7 +318,7 @@ jobs:
               <h1>Security Scan Results</h1>
               
               <div class="tool-section">
-                  <h2>SonarQube Results</h2>
+                  <h2>SonarCloud Results</h2>
                   <pre>
           $(format_json "security-results/sonarqube/issues.json")
                   </pre>
@@ -364,10 +367,10 @@ jobs:
 
   # Deployment
   deploy:
-    name: Deploy to EC2
+    name: Deploy to Test EC2
     needs: [sast, sca, container_scan, iac_scan, zap_scan, report]
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    if: github.ref == 'refs/heads/test-ec2' && github.event_name == 'push'
     steps:
       - uses: actions/checkout@v4
 
